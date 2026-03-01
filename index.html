@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <title>Compass Simplifié</title>
+  <title>Compass DMX</title>
 </head>
 <body>
   <h1>Compass</h1>
@@ -16,13 +16,34 @@
   <div id="notice"></div>
 
   <script>
+    // Ouvrir le WebSocket vers ton serveur DMX
+    const ws = new WebSocket('ws://192.168.1.16:3000'); // Remplace 8080 par ton port
+
+    ws.onopen = () => { document.getElementById('notice').innerText = 'WebSocket connecté'; };
+    ws.onclose = () => { document.getElementById('notice').innerText = 'WebSocket déconnecté'; };
+    ws.onerror = (e) => { document.getElementById('notice').innerText = 'Erreur WebSocket'; console.error(e); };
+
     if (window.DeviceOrientationEvent) {
       document.getElementById('notice').innerHTML = 'API détectée';
       window.addEventListener('deviceorientation', (event) => {
-        document.getElementById('tiltLR').innerText = Math.ceil(event.gamma);
-        document.getElementById('tiltFB').innerText = Math.ceil(event.beta);
-        document.getElementById('direction').innerText = Math.ceil(event.alpha);
-      });
+        const gamma = event.gamma || 0; // gauche-droite
+        const beta = event.beta || 0;   // haut-bas
+        const alpha = event.alpha || 0; // orientation
+
+        // Affichage simple
+        document.getElementById('tiltLR').innerText = Math.ceil(gamma);
+        document.getElementById('tiltFB').innerText = Math.ceil(beta);
+        document.getElementById('direction').innerText = Math.ceil(alpha);
+
+        // Convertir en DMX (0-255)
+        const x = Math.min(Math.max(Math.round((gamma + 90) / 180 * 255), 0), 255);
+        const y = Math.min(Math.max(Math.round((beta + 90) / 180 * 255), 0), 255);
+
+        // Envoyer les données DMX via WebSocket
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: "dmx", channel1: x, channel2: y }));
+        }
+      }, false);
     } else {
       document.getElementById('notice').innerHTML = 'API non détectée';
     }
