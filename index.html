@@ -5,22 +5,37 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Boussole GPS</title>
 <style>
-  body { font-family:sans-serif; background:#111; color:white; text-align:center; padding:50px; }
-  #compassDiscImg { width:200px; transition: transform 0.3s ease; }
+  body { 
+    display:flex; 
+    justify-content:center; 
+    align-items:center; 
+    height:100vh; 
+    background:#111; 
+    color:white; 
+    font-family:sans-serif; 
+    flex-direction:column; 
+  }
+  #status { margin-bottom:20px; }
+  #compassValues { font-size: 1.2em; text-align:center; }
 </style>
 </head>
 <body>
-<h2 id="notice">Initialisation...</h2>
-<div>
-  Cap: <span id="direction">0</span>°<br>
-  X: <span id="tiltLR">0</span><br>
-  Y: <span id="tiltFB">0</span>
+<div id="status">Connexion WebSocket...</div>
+<div id="compassValues">
+  Cap (Nord): 0°<br>
+  X: 0<br>
+  Y: 0
 </div>
-<img id="compassDiscImg" src="https://upload.wikimedia.org/wikipedia/commons/thumb/3/3b/Compass_rose_pale.svg/200px-Compass_rose_pale.svg.png" alt="Boussole">
-
 <script>
-document.addEventListener('DOMContentLoaded', function(event) {
-  const noticeEl = document.getElementById('notice');
+(function() {
+  const statusEl = document.getElementById("status");
+  const compassEl = document.getElementById("compassValues");
+  const ws = new WebSocket(`ws://${location.host}`);
+
+  ws.onopen = () => { statusEl.textContent = "Connecté ! Déplacez-vous pour voir le cap."; };
+  ws.onclose = () => { statusEl.textContent = "Déconnecté."; };
+  ws.onerror = (e) => { statusEl.textContent = "Erreur WebSocket."; console.error(e); };
+
   let prevPos = null;
 
   function deg2rad(deg) { return deg * Math.PI / 180; }
@@ -32,45 +47,38 @@ document.addEventListener('DOMContentLoaded', function(event) {
     const x = Math.cos(deg2rad(lat1))*Math.sin(deg2rad(lat2)) -
               Math.sin(deg2rad(lat1))*Math.cos(deg2rad(lat2))*Math.cos(dLon);
     let brng = rad2deg(Math.atan2(y, x));
-    brng = (brng + 360) % 360;
+    brng = (brng + 360) % 360; // normaliser entre 0 et 360
     return brng;
   }
 
   if ("geolocation" in navigator) {
-    noticeEl.innerHTML = "Utilisation du GPS pour la boussole";
     navigator.geolocation.watchPosition(position => {
       const { latitude, longitude } = position.coords;
-      let heading = 0;
 
+      let heading = 0;
       if (prevPos) {
         heading = getHeading(prevPos.latitude, prevPos.longitude, latitude, longitude);
       }
       prevPos = { latitude, longitude };
 
-      // X et Y peuvent être mappés à -128..127 ou 0..255 selon tes besoins
       const x = Math.min(Math.max(Math.round((Math.sin(deg2rad(heading))+1)/2*255),0),255);
       const y = Math.min(Math.max(Math.round((Math.cos(deg2rad(heading))+1)/2*255),0),255);
 
-      deviceOrientationHandler(x, y, heading);
+      compassEl.innerHTML = `Cap (Nord): ${heading.toFixed(1)}°<br>
+                             X: ${x}<br>
+                             Y: ${y}`;
+
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "compass", heading, x, y }));
+      }
 
     }, err => {
-      noticeEl.innerHTML = "Erreur GPS : " + err.message;
+      statusEl.textContent = "Erreur GPS : " + err.message;
     }, { enableHighAccuracy: true, maximumAge: 1000, timeout: 5000 });
   } else {
-    noticeEl.innerHTML = "GPS non supporté sur ce navigateur";
+    statusEl.textContent = "GPS non supporté sur ce navigateur.";
   }
-
-  function deviceOrientationHandler(tiltLR, tiltFB, dir) {
-    document.getElementById('tiltLR').innerHTML = Math.ceil(tiltLR);
-    document.getElementById('tiltFB').innerHTML = Math.ceil(tiltFB);
-    document.getElementById('direction').innerHTML = Math.ceil(dir);
-
-    const compassDisc = document.getElementById('compassDiscImg');
-    compassDisc.style.transform = `rotate(${dir}deg)`;
-    compassDisc.style.webkitTransform = `rotate(${dir}deg)`;
-    compassDisc.style.MozTransform = `rotate(${dir}deg)`;
-  }
-});
+})();
 </script>
 </body>
 </html>
