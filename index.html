@@ -16,6 +16,8 @@
   <div id="notice"></div>
 
   <script>
+    const ws = new WebSocket('ws://192.168.1.16:3000'); 
+    
     if (window.DeviceOrientationEvent) {
       document.getElementById('notice').innerHTML = 'API détectée';
       window.addEventListener('deviceorientation', (event) => {
@@ -29,3 +31,4 @@
   </script>
 </body>
 </html>
+
